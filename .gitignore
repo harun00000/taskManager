@@ -1,0 +1,17 @@
+# build artifacts
+build/
+.cache/
+
+# compiled files
+*.o
+*.out
+server
+
+# cmake
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# OS / editor
+.vscode/
+.DS_Store
