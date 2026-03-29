@@ -1,5 +1,7 @@
 #include "handler.hpp"
 #include "httpRequest.hpp"
+#include <cstddef>
+#include <string>
 
 std::string requestHandler(const std::string &request, std::vector<Task>& Tasks, size_t &id){
     if (request.size() == 0) return "";
@@ -19,7 +21,19 @@ std::string requestHandler(const std::string &request, std::vector<Task>& Tasks,
     else if (req.getMethod() == "POST" && req.getPath() == "/tasks") 
     {
         std::string title = req.getNewTask();
+        if (title.find("task=") != std::string::npos)
+        {
+            title = title.substr(5);
+        }
+        if (title.empty()) return "HTTP/1.1 400 Bad Request\r\n\r\nEmpty";
+
         return handlePostTasks(Tasks, id, title);
+    }
+
+    // POST /delete?id=42 -> delete task by id
+    else if (req.getMethod() == "POST" && req.getPath().find("/delete") != std::string::npos)
+    {
+        return handleDeleteTask(Tasks, req.getPath());
     }
 
     else return handleError();
@@ -35,30 +49,34 @@ std::string handleGetHello(){
 }
 
 std::string handleGetTasks(const std::vector<Task>& Tasks){
-    std::string json = "[";
+    std::string html = "<h1>Tasks</h1><ul>";    // creating page, ul - list
 
-    for (size_t idx = 0; idx < Tasks.size(); idx++)
+    for (auto& task : Tasks)
     {
-        json.append("{\"id\":");
-        json.append(std::to_string(Tasks[idx].id));
-        json.append(",\"title\":\"");
-        json.append(Tasks[idx].title);
-        json.append("\"}");
+        html += "<li>";                         // li - elem of list (open)
+        html += std::to_string(task.id) + " - " + task.title;
 
-        if (idx != Tasks.size() - 1)
-        {
-            json.append(",");
-        }
+        // ------------ formule of delete--------------
+        html += "<form method='POST' action='/delete?id=";
+        html += std::to_string(task.id);
+        html += "' style='display:inline'>";
+        // ------------ formule of delete--------------
+
+        html += "<button>Delete</button>";      // button
+        html += "</form>";                      // form close
+
+        html += "</li>";                        // close elem of list
     }
 
-    json.append("]");
+    html += "</ul>";                            // close list
+    html += "<br><a href='/'>Back</a>";         // add "back"
 
     return
         "HTTP/1.1 200 OK\r\n"
-        "Content-Type: application/json\r\n"
+        "Content-Type: text/html\r\n"
         "Connection: close\r\n"
         "\r\n" +
-        json;
+        html;
 }
 
 std::string handleGetMain(){
@@ -67,7 +85,15 @@ std::string handleGetMain(){
         "Content-Type: text/html\r\n"
         "Connection: close\r\n"
         "\r\n"
-        "<h1>Main page</h1>";
+        "<h1>Task Manager</h1>"
+
+        "<form method='POST' action='/tasks'>"          
+        "<input name='task' placeholder='New task'>"
+        "<button>Add</button>"
+        "</form>"
+
+        "<br>"
+        "<a href='/tasks'>View tasks</a>";
 }
 
 std::string handlePostTasks(std::vector<Task>& Tasks, size_t& id, const std::string& title){
@@ -91,6 +117,27 @@ std::string handlePostTasks(std::vector<Task>& Tasks, size_t& id, const std::str
         "<h1>Task added</h1>";
 }
 
+std::string handleDeleteTask(std::vector<Task>& Tasks, const std::string& path){
+    size_t idPos = path.find("id=");
+    if (idPos == std::string::npos) return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";        
+                                            // id= .....
+    int id = std::stoi(path.substr(idPos + 3));
+    for (size_t idx = 0; idx < Tasks.size(); ++idx)
+    {                                                  
+        if (Tasks[idx].id == id){
+            Tasks.erase(Tasks.begin() + idx);   // cause we need iterator
+            break;
+        }
+    }
+
+    return 
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "<h1>Deleted</h1>";
+}
+
 std::string handleError(){
     return 
         "HTTP/1.1 404 Not Found\r\n"
@@ -99,3 +146,11 @@ std::string handleError(){
         "\r\n"
         "<h1>Not found</h1>";
 }
+
+
+
+
+
+
+
+
