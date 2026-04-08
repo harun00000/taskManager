@@ -11,7 +11,7 @@ int main(){
     std::cout << "Server started on http://localhost:9090\n";
 
     std::vector<Task> tasks;
-    size_t id = 42;
+    int id = 42;
 
     while(true)
     {

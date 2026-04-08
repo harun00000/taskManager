@@ -1,70 +1,114 @@
 #include "handler.hpp"
 #include "httpRequest.hpp"
 #include <cstddef>
-#include <string>
+#include <vector>
 
-std::string requestHandler(const std::string &request, std::vector<Task>& Tasks, size_t &id){
+std::string requestHandler(const std::string &request, std::vector<Task>& Tasks, int &id){
     if (request.size() == 0) return "";
 
     HttpRequest req(request);
 
-    // GET  /hello  ->  hello page    
-    if (req.getMethod() == "GET" && req.getPath() == "/hello") return handleGetHello();
-
     // GET  /tasks  ->  tasks page
-    else if (req.getMethod() == "GET" && req.getPath() == "/tasks") return handleGetTasks(Tasks);
+    if (req.getMethod() == "GET" && req.getPath() == "/tasks") return handleGetTasks(Tasks);
 
     // GET  /  ->  main page
-    else if (req.getMethod() == "GET" && req.getPath() == "/") return handleGetMain();
+    if (req.getMethod() == "GET" && req.getPath() == "/") return handleGetMain();
 
     // POST /tasks  ->  add task
-    else if (req.getMethod() == "POST" && req.getPath() == "/tasks") 
+    if (req.getMethod() == "POST" && req.getPath() == "/tasks") 
     {
         std::string title = req.getNewTask();
         if (title.find("task=") != std::string::npos)
         {
             title = title.substr(5);
         }
+
+        for (char& ch : title)
+        {
+            if (ch == '+')
+                ch = ' ';
+        }
+
         if (title.empty()) return "HTTP/1.1 400 Bad Request\r\n\r\nEmpty";
 
         return handlePostTasks(Tasks, id, title);
     }
 
     // POST /delete?id=42 -> delete task by id
-    else if (req.getMethod() == "POST" && req.getPath().find("/delete") != std::string::npos)
+    if (req.getMethod() == "POST" && req.getPath().find("/delete") != std::string::npos)
     {
         return handleDeleteTask(Tasks, req.getPath());
     }
 
-    else return handleError();
-}
+    // POST /update?id=42 -> update task by id
+    if (req.getMethod() == "POST" && req.getPath().find("/update") != std::string::npos)
+    {
+        std::string title = req.getNewTask();
+        if (title.find("task=") != std::string::npos)
+        {
+            title = title.substr(5); // task=
+        }
 
-std::string handleGetHello(){
-    return 
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n"
-        "Connection: close\r\n"
-        "\r\n"
-        "<h1>Hello page</h1>";
+        for (char& ch : title)
+        {
+            if (ch == '+')
+                ch = ' ';
+        }
+
+        if (title.empty()) return "HTTP/1.1 400 Bad Request\r\n\r\nEmpty";
+        
+        return handleUpdateTasks(title, Tasks, req.getPath());
+    }
+
+    // POST /done?id=42 -> make task done
+    if (req.getMethod() == "POST" && req.getPath().find("/done") != std::string::npos)
+    {
+        return handleTaskDone(Tasks, req.getPath());
+    }
+
+    return handleError();
 }
 
 std::string handleGetTasks(const std::vector<Task>& Tasks){
     std::string html = "<h1>Tasks</h1><ul>";    // creating page, ul - list
 
-    for (auto& task : Tasks)
+    for (const auto& task : Tasks)
     {
         html += "<li>";                         // li - elem of list (open)
         html += std::to_string(task.id) + " - " + task.title;
 
-        // ------------ formule of delete--------------
+        if (task.isDone == true)
+        {
+            html += " [DONE]";
+        }
+
+        // ------------ formule of delete-----------------
         html += "<form method='POST' action='/delete?id=";
         html += std::to_string(task.id);
         html += "' style='display:inline'>";
-        // ------------ formule of delete--------------
+        html += "<button>Delete</button>";
+        html += "</form>";
+        // ------------ formule of delete-----------------
 
-        html += "<button>Delete</button>";      // button
-        html += "</form>";                      // form close
 
+        // ------------ formule of update-----------------
+        html += "<form method='POST' action='/update?id=";
+        html += std::to_string(task.id);
+        html += "' style='display:inline'>";
+        html += "<input name='task' placeholder='Edit'>";
+        html += "<button>Edit</button>";
+        html += "</form>";
+        // ------------ formule of update-----------------
+
+
+        // ------------ formule of done-----------------
+        html += "<form method='POST' action='/done?id=";
+        html += std::to_string(task.id);
+        html += "' style='display:inline'>";
+        html += "<button>Done</button>";
+        html += "</form>";
+        // ------------ formule of done-----------------
+        
         html += "</li>";                        // close elem of list
     }
 
@@ -96,7 +140,7 @@ std::string handleGetMain(){
         "<a href='/tasks'>View tasks</a>";
 }
 
-std::string handlePostTasks(std::vector<Task>& Tasks, size_t& id, const std::string& title){
+std::string handlePostTasks(std::vector<Task>& Tasks, int& id, const std::string& title){
     if (title.empty())
     {
         return 
@@ -119,13 +163,14 @@ std::string handlePostTasks(std::vector<Task>& Tasks, size_t& id, const std::str
 
 std::string handleDeleteTask(std::vector<Task>& Tasks, const std::string& path){
     size_t idPos = path.find("id=");
-    if (idPos == std::string::npos) return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";        
+    if (idPos == std::string::npos) 
+        return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";        
                                             // id= .....
     int id = std::stoi(path.substr(idPos + 3));
     for (size_t idx = 0; idx < Tasks.size(); ++idx)
     {                                                  
         if (Tasks[idx].id == id){
-            Tasks.erase(Tasks.begin() + idx);   // cause we need iterator
+            Tasks.erase(Tasks.begin() + idx);   // cause we need iterator for erase
             break;
         }
     }
@@ -138,6 +183,54 @@ std::string handleDeleteTask(std::vector<Task>& Tasks, const std::string& path){
         "<h1>Deleted</h1>";
 }
 
+std::string handleUpdateTasks(std::string& title, std::vector<Task>& Tasks, const std::string& path){
+    size_t idPos = path.find("id=");
+    if (idPos == std::string::npos) 
+        return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";
+
+    int id = std::stoi(path.substr(idPos + 3));
+    for (size_t idx = 0; idx < Tasks.size(); ++idx)
+    {
+        if (Tasks[idx].id == id)
+        {
+            Tasks[idx].title = title;
+            break;
+        }
+    }
+
+    return 
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "<h1>Updated</h1>";
+}
+
+std::string handleTaskDone(std::vector<Task>& Tasks, const std::string& path){
+    size_t idPos = path.find("id=");
+    if (idPos == std::string::npos)
+        return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";
+
+    int id = std::stoi(path.substr(idPos + 3));
+
+    for (size_t idx = 0; idx < Tasks.size(); ++idx)
+    {
+        if (Tasks[idx].id == id)
+        {
+            Tasks[idx].isDone = true;
+            break;
+        }
+    }
+    
+    return 
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "<h1>Marked as done</h1>";
+}
+
+
 std::string handleError(){
     return 
         "HTTP/1.1 404 Not Found\r\n"
@@ -146,6 +239,8 @@ std::string handleError(){
         "\r\n"
         "<h1>Not found</h1>";
 }
+
+
 
 
 

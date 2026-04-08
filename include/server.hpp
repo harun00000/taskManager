@@ -12,5 +12,5 @@
 extern int server_fd_global;
 
 int createServer();
-void handleClient(int new_socket, std::vector<Task>& tasks, size_t& id);
+void handleClient(int new_socket, std::vector<Task>& tasks, int& id);
 void handleSignal(int signal);

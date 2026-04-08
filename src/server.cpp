@@ -38,7 +38,7 @@ int createServer(){
 }
 
 // handle one client
-void handleClient(int new_socket, std::vector<Task>& Tasks, size_t& id){
+void handleClient(int new_socket, std::vector<Task>& Tasks, int& id){
     char buffer[1024] = {0};              // for reading
     ssize_t bytes = read(new_socket, buffer, 1023);
 
