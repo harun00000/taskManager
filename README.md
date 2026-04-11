@@ -32,6 +32,9 @@ make
 Open in browser:
 http://localhost:9090
 
+To stop the server:
+Press **Ctrl + C** in the terminal.
+
 ## Project structure
 
 * `server.cpp` — server and socket logic
@@ -44,7 +47,7 @@ http://localhost:9090
 * Only basic HTTP is implemented
 * No frameworks are used
 * Designed for learning purposes
-* Only english letters
+
 ---
 
 Made as a learning project in C++
