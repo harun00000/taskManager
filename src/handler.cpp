@@ -1,7 +1,5 @@
 #include "handler.hpp"
-#include "httpRequest.hpp"
-#include <cstddef>
-#include <vector>
+#include "storage.hpp"
 
 std::string requestHandler(const std::string &request, std::vector<Task>& Tasks, int &id){
     if (request.size() == 0) return "";
@@ -70,50 +68,84 @@ std::string requestHandler(const std::string &request, std::vector<Task>& Tasks,
 }
 
 std::string handleGetTasks(const std::vector<Task>& Tasks){
-    std::string html = "<h1>Tasks</h1><ul>";    // creating page, ul - list
+    std::string html =
+        "<html><head>"
+        "<meta charset='UTF-8'>"    
+        "<style>"
+
+        "body { font-family: Arial; background: #f5f5f5; text-align: center; }"
+
+        ".flag { width: 100%; height: 60px; }"
+        ".white { background: white; height: 20px; }"
+        ".blue { background: blue; height: 20px; }"
+        ".red { background: red; height: 20px; }"
+
+        // cards
+        ".task { "
+        "background: white; "
+        "margin: 10px auto; "
+        "padding: 10px; "
+        "width: 400px; "
+        "border-radius: 8px; "
+        "box-shadow: 0 0 5px rgba(0,0,0,0.1); "
+        "}"
+
+        // buttons
+        ".controls { margin-top: 5px; }"
+        "button { margin-left: 5px; padding: 5px 10px; }"
+
+        "</style>"
+        "</head><body>"
+
+        // secret fitches
+        "<div class='flag'>"
+        "<div class='white'></div>"
+        "<div class='blue'></div>"
+        "<div class='red'></div>"
+        "</div>"
+
+        "<h1>Task Manager</h1>";
 
     for (const auto& task : Tasks)
     {
-        html += "<li>";                         // li - elem of list (open)
+        html += "<div class='task'>";
         html += std::to_string(task.id) + " - " + task.title;
 
         if (task.isDone == true)
         {
-            html += " [DONE]";
+            html += " <span style='color:green'>✔</span>";
         }
 
-        // ------------ formule of delete-----------------
+        html += "<div class='controls'>";
+
+        // DELETE
         html += "<form method='POST' action='/delete?id=";
         html += std::to_string(task.id);
         html += "' style='display:inline'>";
         html += "<button>Delete</button>";
         html += "</form>";
-        // ------------ formule of delete-----------------
 
+        // DONE
+        html += "<form method='POST' action='/done?id=";
+        html += std::to_string(task.id);
+        html += "' style='display:inline'>";
+        html += "<button>Done</button>";
+        html += "</form>";
 
-        // ------------ formule of update-----------------
+        // UPDATE
         html += "<form method='POST' action='/update?id=";
         html += std::to_string(task.id);
         html += "' style='display:inline'>";
         html += "<input name='task' placeholder='Edit'>";
         html += "<button>Edit</button>";
         html += "</form>";
-        // ------------ formule of update-----------------
 
-
-        // ------------ formule of done-----------------
-        html += "<form method='POST' action='/done?id=";
-        html += std::to_string(task.id);
-        html += "' style='display:inline'>";
-        html += "<button>Done</button>";
-        html += "</form>";
-        // ------------ formule of done-----------------
-        
-        html += "</li>";                        // close elem of list
+        html += "</div>";   // close controls
+        html += "</div>";   // close tasks
     }
 
-    html += "</ul>";                            // close list
-    html += "<br><a href='/'>Back</a>";         // add "back"
+    html += "<br><a href='/'>Back</a>";
+    html += "</body></html>";
 
     return
         "HTTP/1.1 200 OK\r\n"
@@ -151,36 +183,48 @@ std::string handlePostTasks(std::vector<Task>& Tasks, int& id, const std::string
             "<h1>Empty task</h1>";
     }
 
-    Tasks.push_back({id++, title});
+    // limit
+    std::string newTitle = title;
+    if (title.size() > 100){                                 
+        newTitle = title.substr(0, 100);
+    }
+    
+    Tasks.push_back({id++, newTitle, false});
+    saveTasksInFile("tasks.txt", Tasks);
 
-    return
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n"
+    return 
+        "HTTP/1.1 303 See Other\r\n"
+        "Location: /tasks\r\n"
         "Connection: close\r\n"
-        "\r\n"
-        "<h1>Task added</h1>";
+        "\r\n";
 }
 
 std::string handleDeleteTask(std::vector<Task>& Tasks, const std::string& path){
     size_t idPos = path.find("id=");
     if (idPos == std::string::npos) 
         return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";        
-                                            // id= .....
-    int id = std::stoi(path.substr(idPos + 3));
+                                            
+    int id{};
+    try {                                 // id= ...        
+        id = std::stoi(path.substr(idPos + 3));
+    } catch (...){                                          // input not int
+        return "HTTP/1.1 400 Bad Request\r\n\r\nInvalid id";
+    }
+
     for (size_t idx = 0; idx < Tasks.size(); ++idx)
     {                                                  
         if (Tasks[idx].id == id){
             Tasks.erase(Tasks.begin() + idx);   // cause we need iterator for erase
+            saveTasksInFile("tasks.txt", Tasks);
             break;
         }
     }
 
-    return 
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n"
+    return  
+        "HTTP/1.1 303 See Other\r\n"
+        "Location: /tasks\r\n"
         "Connection: close\r\n"
-        "\r\n"
-        "<h1>Deleted</h1>";
+        "\r\n";
 }
 
 std::string handleUpdateTasks(std::string& title, std::vector<Task>& Tasks, const std::string& path){
@@ -188,22 +232,28 @@ std::string handleUpdateTasks(std::string& title, std::vector<Task>& Tasks, cons
     if (idPos == std::string::npos) 
         return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";
 
-    int id = std::stoi(path.substr(idPos + 3));
+    int id{};
+    try {                                           
+        id = std::stoi(path.substr(idPos + 3));
+    } catch (...){                                          // input not int
+        return "HTTP/1.1 400 Bad Request\r\n\r\nInvalid id";
+    }
+
     for (size_t idx = 0; idx < Tasks.size(); ++idx)
     {
         if (Tasks[idx].id == id)
         {
             Tasks[idx].title = title;
+            saveTasksInFile("tasks.txt", Tasks);
             break;
         }
     }
 
     return 
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n"
+        "HTTP/1.1 303 See Other\r\n"
+        "Location: /tasks\r\n"
         "Connection: close\r\n"
-        "\r\n"
-        "<h1>Updated</h1>";
+        "\r\n";
 }
 
 std::string handleTaskDone(std::vector<Task>& Tasks, const std::string& path){
@@ -211,23 +261,28 @@ std::string handleTaskDone(std::vector<Task>& Tasks, const std::string& path){
     if (idPos == std::string::npos)
         return "HTTP/1.1 400 Bad Request\r\n\r\nNo id";
 
-    int id = std::stoi(path.substr(idPos + 3));
+    int id{};
+    try {                                           
+        id = std::stoi(path.substr(idPos + 3));
+    } catch (...){                                          // input not int
+        return "HTTP/1.1 400 Bad Request\r\n\r\nInvalid id";
+    }
 
     for (size_t idx = 0; idx < Tasks.size(); ++idx)
     {
         if (Tasks[idx].id == id)
         {
-            Tasks[idx].isDone = true;
+            Tasks[idx].isDone = !Tasks[idx].isDone;
+            saveTasksInFile("tasks.txt", Tasks);
             break;
         }
     }
     
     return 
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n"
+        "HTTP/1.1 303 See Other\r\n"
+        "Location: /tasks\r\n"
         "Connection: close\r\n"
-        "\r\n"
-        "<h1>Marked as done</h1>";
+        "\r\n";
 }
 
 

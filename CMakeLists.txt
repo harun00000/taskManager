@@ -10,4 +10,5 @@ add_executable(server
     src/handler.cpp
     src/httpRequest.cpp
     src/server.cpp
+    src/storage.cpp
 )

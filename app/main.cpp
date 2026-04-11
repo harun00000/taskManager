@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "storage.hpp"
 
 int main(){
     signal(SIGINT, handleSignal);
@@ -10,8 +11,8 @@ int main(){
 
     std::cout << "Server started on http://localhost:9090\n";
 
-    std::vector<Task> tasks;
-    int id = 42;
+    std::vector<Task> tasks = loadTasksFromFile("tasks.txt");
+    int id = getNextId(tasks);
 
     while(true)
     {

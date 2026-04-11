@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include "httpRequest.hpp"
 
 struct Task{
     int id;
